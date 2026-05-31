@@ -1,82 +1,155 @@
-﻿using UnityEngine;
+﻿using System.Collections;
+using UnityEngine;
+using UnityEngine.Playables;
 
 public class GoalShooter : MonoBehaviour
 {
-    public enum ShooterType { Left, Middle, Right }
-
     [System.Serializable]
     public class Shooter
     {
-        public ShooterType type;
         public Transform shootPoint;
+        public PlayableDirector timeline;
+        public Transform gun;
     }
 
     [Header("Shooters")]
-    public Shooter[] shooters;
+    [SerializeField] private Shooter[] shooters;
 
     [Header("Ball Pool")]
-    public BallPool ballPool;
+    [SerializeField] private BallPool ballPool;
 
     [Header("Goal Area")]
-    public float minX;
-    public float maxX;
-    public float minY;
-    public float maxY;
-    public float targetZ;
+    [SerializeField] private float minX;
+    [SerializeField] private float maxX;
+    [SerializeField] private float minY;
+    [SerializeField] private float maxY;
+    [SerializeField] private float targetZ;
 
     [Header("Settings")]
-    public float shootForce = 15f;
-    public float shootEvery = 3f;
+    [SerializeField] public float shootForce = 15f;
+    [SerializeField] private float shootInterval = 3f;
+    [SerializeField] private float timelineDelay = 4f;
+    [SerializeField] private float gunRotateTime = 1f;
 
-    float timer;
-    int lastShooterIndex = -1;
+    private float timer;
+    private int lastShooterIndex = -1;
+    private bool isShooting;
 
-    void Update()
+    private void Start()
     {
+        StopAllTimelines();
+    }
+
+    private void Update()
+    {
+        if (isShooting) return;
+
         timer += Time.deltaTime;
-        if (timer >= shootEvery)
+        if (timer < shootInterval) return;
+
+        timer = 0f;
+        ShootRandomShooter();
+    }
+
+    private void StopAllTimelines()
+    {
+        foreach (Shooter shooter in shooters)
         {
-            timer = 0;
-            ShootRandom();
+            if (shooter.timeline != null)
+                shooter.timeline.Stop();
         }
     }
 
-    void ShootRandom()
+    private void ShootRandomShooter()
     {
-        
         if (shooters == null || shooters.Length == 0)
         {
-            Debug.LogWarning("GoalShooter: مفيش Shooters!");
+            Debug.LogWarning($"{nameof(GoalShooter)}: No shooters assigned.");
             return;
         }
+
         if (ballPool == null)
         {
-            Debug.LogWarning("GoalShooter: مفيش BallPool!");
+            Debug.LogWarning($"{nameof(GoalShooter)}: No ball pool assigned.");
             return;
         }
 
-      
-        int randomIndex;
+        int index = GetRandomShooterIndex();
+        lastShooterIndex = index;
+        StartCoroutine(ShootRoutine(shooters[index]));
+    }
+
+    private int GetRandomShooterIndex()
+    {
         if (shooters.Length == 1)
-            randomIndex = 0;
-        else
-            do { randomIndex = Random.Range(0, shooters.Length); }
-            while (randomIndex == lastShooterIndex);
+            return 0;
 
-        lastShooterIndex = randomIndex;
-        Shooter shooter = shooters[randomIndex];
+        int index;
+        do
+        {
+            index = Random.Range(0, shooters.Length);
+        }
+        while (index == lastShooterIndex);
 
-       
-        Ball ball = ballPool.GetBall(shooter.shootPoint.position);
+        return index;
+    }
 
-        Vector3 target = new Vector3(
+    private Vector3 GetRandomTarget()
+    {
+        return new Vector3(
             Random.Range(minX, maxX),
             Random.Range(minY, maxY),
             targetZ);
+    }
 
-        Vector3 dir = (target - ball.transform.position).normalized;
-        ball.Launch(dir, shootForce);
+    private IEnumerator ShootRoutine(Shooter shooter)
+    {
+        isShooting = true;
 
-        Debug.Log("Shooter: " + shooter.type);
+        Vector3 target = GetRandomTarget();
+
+        PlayTimeline(shooter);
+        yield return new WaitForSeconds(timelineDelay);
+
+        yield return AimGun(shooter.gun, target);
+
+        FireBall(shooter, target);
+
+        isShooting = false;
+    }
+
+    private void PlayTimeline(Shooter shooter)
+    {
+        if (shooter.timeline == null) return;
+
+        shooter.timeline.Stop();
+        shooter.timeline.Play();
+    }
+
+    private IEnumerator AimGun(Transform gun, Vector3 target)
+    {
+        if (gun == null) yield break;
+
+        Quaternion startRotation = gun.rotation;
+        Vector3 direction = (target - gun.position).normalized;
+        Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
+
+        float elapsed = 0f;
+        while (elapsed < gunRotateTime)
+        {
+            elapsed += Time.deltaTime;
+            float t = elapsed / gunRotateTime;
+            gun.rotation = Quaternion.Slerp(startRotation, targetRotation, t);
+            yield return null;
+        }
+
+        gun.rotation = targetRotation;
+    }
+
+    private void FireBall(Shooter shooter, Vector3 target)
+    {
+        Ball ball = ballPool.GetBall(shooter.shootPoint.position);
+        Vector3 direction = (target - ball.transform.position).normalized;
+        ball.Launch(direction, shootForce);
     }
 }

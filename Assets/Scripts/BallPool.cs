@@ -8,7 +8,7 @@ public class BallPool : MonoBehaviour
     public int poolSize = 10;
 
     readonly Queue<Ball> available = new Queue<Ball>();
-    readonly List<Ball>  all       = new List<Ball>();   // every ball ever created
+    readonly List<Ball>  all       = new List<Ball>();  
 
     void Awake()
     {
@@ -19,8 +19,8 @@ public class BallPool : MonoBehaviour
     Ball CreateBall()
     {
         GameObject go = Instantiate(ballPrefab, Vector3.zero, Quaternion.identity);
-        go.transform.SetParent(transform); // keep hierarchy clean
-        Ball ball = go.GetComponent<Ball>();
+        go.transform.SetParent(transform); 
+        Ball ball = go.GetComponentInChildren<Ball>();
         ball.pool = this;
         all.Add(ball);
         go.SetActive(false);
@@ -28,9 +28,7 @@ public class BallPool : MonoBehaviour
         return ball;
     }
 
-    /// <summary>
-    /// Get a ball from the pool. Creates a new one if pool is empty.
-    /// </summary>
+ 
     public Ball GetBall(Vector3 position)
     {
         Ball ball = available.Count > 0 ? available.Dequeue() : CreateBall();
@@ -40,17 +38,13 @@ public class BallPool : MonoBehaviour
         return ball;
     }
 
-    /// <summary>
-    /// Return a ball to the pool for future reuse (replaces Destroy).
-    /// </summary>
+   
     public void ReturnBall(Ball ball)
     {
         ball.gameObject.SetActive(false);
         available.Enqueue(ball);
     }
 
-    /// <summary>
-    /// Access all balls (active + inactive) if you need them later.
-    /// </summary>
+   
     public List<Ball> GetAllBalls() => all;
 }

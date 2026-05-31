@@ -24,24 +24,28 @@ public class LevelManager : MonoBehaviour
 
     [Header("References")]
     public GoalShooter goalShooter;
+    public Transform vrCamera;
+
+    [Header("UI Settings")]
+    public float uiDistance = 2f;
+    public float uiWidth = 1.5f;
+    public float uiHeight = 1f;
 
     [System.Serializable]
     public class MessageEntry
     {
-        public string text;   // مثلاً "Excellent!"
-        public AudioClip clip;   // الصوت بتاعها
+        public string text;
+        public AudioClip clip;
     }
 
-    // ── UI ──────────────────────────────────────────────────────────────
     Canvas uiCanvas;
     TextMeshProUGUI messageText;
+    GameObject canvasGO;
 
-    // ── State ────────────────────────────────────────────────────────────
     int currentLevel = 1;
     int saveCount = 0;
     bool isTransitioning = false;
 
-    // ────────────────────────────────────────────────────────────────────
     void Awake()
     {
         CreateUI();
@@ -70,21 +74,17 @@ public class LevelManager : MonoBehaviour
         isTransitioning = true;
         goalShooter.enabled = false;
 
-        // صوت الليفل أب العام
         if (audioSource != null && levelUpClip != null)
             audioSource.PlayOneShot(levelUpClip);
 
-        // اختار message عشوائية
         if (messages != null && messages.Length > 0)
         {
             int index = Random.Range(0, messages.Length);
             MessageEntry entry = messages[index];
 
-            // شغل الصوت بتاع الرسالة دي
             if (audioSource != null && entry.clip != null)
                 audioSource.PlayOneShot(entry.clip);
 
-            // وريها على الشاشة
             ShowMessage(entry.text + "\nLevel " + (currentLevel + 1) + "!");
         }
 
@@ -108,34 +108,33 @@ public class LevelManager : MonoBehaviour
 
     void CreateUI()
     {
-        GameObject canvasGO = new GameObject("LevelUpCanvas");
+        canvasGO = new GameObject("LevelUpCanvas");
+
         uiCanvas = canvasGO.AddComponent<Canvas>();
-        uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        uiCanvas.renderMode = RenderMode.WorldSpace;
         uiCanvas.sortingOrder = 10;
-        canvasGO.AddComponent<CanvasScaler>().uiScaleMode =
-            CanvasScaler.ScaleMode.ScaleWithScreenSize;
+
+        CanvasScaler scaler = canvasGO.AddComponent<CanvasScaler>();
+        scaler.dynamicPixelsPerUnit = 10;
+
         canvasGO.AddComponent<GraphicRaycaster>();
 
-        GameObject panel = new GameObject("Panel");
-        panel.transform.SetParent(canvasGO.transform, false);
-        Image panelImg = panel.AddComponent<Image>();
-        panelImg.color = new Color(0, 0, 0, 0.5f);
-        RectTransform pr = panel.GetComponent<RectTransform>();
-        pr.anchorMin = Vector2.zero;
-        pr.anchorMax = Vector2.one;
-        pr.offsetMin = Vector2.zero;
-        pr.offsetMax = Vector2.zero;
+        RectTransform canvasRect = canvasGO.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(uiWidth * 100, uiHeight * 100);
+        canvasRect.localScale = Vector3.one * 0.01f;
 
+        // Text مباشرة بدون Panel أو خلفية
         GameObject textGO = new GameObject("MessageText");
-        textGO.transform.SetParent(panel.transform, false);
+        textGO.transform.SetParent(canvasGO.transform, false);
         messageText = textGO.AddComponent<TextMeshProUGUI>();
-        messageText.fontSize = 72;
+        messageText.fontSize = 18;
         messageText.fontStyle = FontStyles.Bold;
         messageText.alignment = TextAlignmentOptions.Center;
         messageText.color = Color.yellow;
+
         RectTransform tr = textGO.GetComponent<RectTransform>();
-        tr.anchorMin = new Vector2(0.1f, 0.3f);
-        tr.anchorMax = new Vector2(0.9f, 0.7f);
+        tr.anchorMin = new Vector2(0.1f, 0.2f);
+        tr.anchorMax = new Vector2(0.9f, 0.8f);
         tr.offsetMin = Vector2.zero;
         tr.offsetMax = Vector2.zero;
 
@@ -144,15 +143,21 @@ public class LevelManager : MonoBehaviour
 
     void ShowMessage(string msg)
     {
+        if (vrCamera != null)
+        {
+            canvasGO.transform.position = vrCamera.position + vrCamera.forward * uiDistance;
+            canvasGO.transform.rotation = Quaternion.LookRotation(
+                canvasGO.transform.position - vrCamera.position);
+        }
+
         messageText.text = msg;
-        uiCanvas.gameObject.SetActive(true);
+        canvasGO.SetActive(true);
         StartCoroutine(AnimateText());
     }
 
     void HideMessage()
     {
-        StopCoroutine(AnimateText());
-        uiCanvas.gameObject.SetActive(false);
+        canvasGO.SetActive(false);
     }
 
     IEnumerator AnimateText()
@@ -165,6 +170,11 @@ public class LevelManager : MonoBehaviour
             elapsed += Time.deltaTime;
             float scale = 1f + 0.1f * Mathf.Sin(elapsed * 6f);
             messageText.transform.localScale = baseScale * scale;
+
+            if (vrCamera != null)
+                canvasGO.transform.rotation = Quaternion.LookRotation(
+                    canvasGO.transform.position - vrCamera.position);
+
             yield return null;
         }
     }
