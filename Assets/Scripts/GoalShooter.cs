@@ -1,4 +1,5 @@
 ﻿using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Playables;
 
@@ -8,8 +9,16 @@ public class GoalShooter : MonoBehaviour
     public class Shooter
     {
         public Transform shootPoint;
-        public PlayableDirector timeline;
+        //public PlayableDirector timeline;
         public Transform gun;
+    }
+
+    [System.Serializable]
+    public class TargetPoint
+    {
+        public Transform point;
+        [Min(1)]
+        public int weight = 1;
     }
 
     [Header("Shooters")]
@@ -18,65 +27,56 @@ public class GoalShooter : MonoBehaviour
     [Header("Ball Pool")]
     [SerializeField] private BallPool ballPool;
 
-    [Header("Goal Area")]
-    [SerializeField] private float minX;
-    [SerializeField] private float maxX;
-    [SerializeField] private float minY;
-    [SerializeField] private float maxY;
-    [SerializeField] private float targetZ;
+    [Header("Target Points")]
+    [SerializeField] private TargetPoint[] targetPoints;
 
     [Header("Settings")]
     [SerializeField] public float shootForce = 15f;
     [SerializeField] private float shootInterval = 3f;
-    [SerializeField] private float timelineDelay = 4f;
+    //[SerializeField] private float timelineDelay = 4f;
     [SerializeField] private float gunRotateTime = 1f;
 
     private float timer;
     private int lastShooterIndex = -1;
+    private int lastTargetIndex = -1;
     private bool isShooting;
+    private int currentTargetIndex = -1;
 
-    private void Start()
-    {
-        StopAllTimelines();
-    }
+    //private void Start()
+    //{
+    //    foreach (Shooter s in shooters)
+    //        s.timeline?.Stop();
+    //}
 
     private void Update()
     {
-        if (isShooting) return;
+        if (isShooting)
+            return;
 
         timer += Time.deltaTime;
-        if (timer < shootInterval) return;
+
+        if (timer < shootInterval)
+            return;
 
         timer = 0f;
         ShootRandomShooter();
     }
 
-    private void StopAllTimelines()
-    {
-        foreach (Shooter shooter in shooters)
-        {
-            if (shooter.timeline != null)
-                shooter.timeline.Stop();
-        }
-    }
-
     private void ShootRandomShooter()
     {
         if (shooters == null || shooters.Length == 0)
-        {
-            Debug.LogWarning($"{nameof(GoalShooter)}: No shooters assigned.");
             return;
-        }
 
         if (ballPool == null)
-        {
-            Debug.LogWarning($"{nameof(GoalShooter)}: No ball pool assigned.");
             return;
-        }
 
-        int index = GetRandomShooterIndex();
-        lastShooterIndex = index;
-        StartCoroutine(ShootRoutine(shooters[index]));
+        if (targetPoints == null || targetPoints.Length == 0)
+            return;
+
+        int shooterIndex = GetRandomShooterIndex();
+        lastShooterIndex = shooterIndex;
+
+        StartCoroutine(ShootRoutine(shooters[shooterIndex]));
     }
 
     private int GetRandomShooterIndex()
@@ -85,6 +85,7 @@ public class GoalShooter : MonoBehaviour
             return 0;
 
         int index;
+
         do
         {
             index = Random.Range(0, shooters.Length);
@@ -94,62 +95,114 @@ public class GoalShooter : MonoBehaviour
         return index;
     }
 
-    private Vector3 GetRandomTarget()
+    private int GetWeightedTargetIndex()
     {
-        return new Vector3(
-            Random.Range(minX, maxX),
-            Random.Range(minY, maxY),
-            targetZ);
+        if (targetPoints.Length == 1)
+            return 0;
+
+        int totalWeight = 0;
+
+        for (int i = 0; i < targetPoints.Length; i++)
+        {
+            if (i == lastTargetIndex)
+                continue;
+
+            totalWeight += Mathf.Max(1, targetPoints[i].weight);
+        }
+
+        int randomValue = Random.Range(0, totalWeight);
+
+        int currentWeight = 0;
+
+        for (int i = 0; i < targetPoints.Length; i++)
+        {
+            if (i == lastTargetIndex)
+                continue;
+
+            currentWeight += Mathf.Max(1, targetPoints[i].weight);
+
+            if (randomValue < currentWeight)
+            {
+                lastTargetIndex = i;
+                return i;
+            }
+        }
+
+        return 0;
     }
 
     private IEnumerator ShootRoutine(Shooter shooter)
     {
         isShooting = true;
 
-        Vector3 target = GetRandomTarget();
+        currentTargetIndex = GetWeightedTargetIndex();
+        Vector3 targetPosition = targetPoints[currentTargetIndex].point.position;
 
-        PlayTimeline(shooter);
-        yield return new WaitForSeconds(timelineDelay);
+        //shooter.timeline?.Stop();
+        //shooter.timeline?.Play();
 
-        yield return AimGun(shooter.gun, target);
+        //yield return new WaitForSeconds(timelineDelay);
 
-        FireBall(shooter, target);
+        yield return AimGun(shooter.gun, targetPosition);
+
+        FireBall(shooter, targetPosition);
 
         isShooting = false;
     }
 
-    private void PlayTimeline(Shooter shooter)
-    {
-        if (shooter.timeline == null) return;
-
-        shooter.timeline.Stop();
-        shooter.timeline.Play();
-    }
-
     private IEnumerator AimGun(Transform gun, Vector3 target)
     {
-        if (gun == null) yield break;
+        if (gun == null)
+            yield break;
 
-        Quaternion startRotation = gun.rotation;
-        Vector3 direction = (target - gun.position).normalized;
-        Quaternion targetRotation = Quaternion.LookRotation(direction, Vector3.up);
+        Quaternion startRot = gun.rotation;
+
+        Quaternion endRot = Quaternion.LookRotation(
+            (target - gun.position).normalized,
+            Vector3.up
+        );
 
         float elapsed = 0f;
+
         while (elapsed < gunRotateTime)
         {
             elapsed += Time.deltaTime;
-            float t = elapsed / gunRotateTime;
-            gun.rotation = Quaternion.Slerp(startRotation, targetRotation, t);
+
+            gun.rotation = Quaternion.Slerp(
+                startRot,
+                endRot,
+                elapsed / gunRotateTime
+            );
+
             yield return null;
         }
 
-        gun.rotation = targetRotation;
+        gun.rotation = endRot;
     }
 
     private void FireBall(Shooter shooter, Vector3 target)
     {
         Ball ball = ballPool.GetBall(shooter.shootPoint.position);
+
         Vector3 direction = (target - ball.transform.position).normalized;
-        ball.Launch(direction, shootForce);
+
+        ball.LaunchToTarget(target,shootForce);
     }
+    //private void OnDrawGizmos()
+    //{
+    //    if (targetPoints == null ||
+    //        currentTargetIndex < 0 ||
+    //        currentTargetIndex >= targetPoints.Length)
+    //        return;
+
+    //    if (targetPoints[currentTargetIndex] == null ||
+    //        targetPoints[currentTargetIndex].point == null)
+    //        return;
+
+    //    Gizmos.color = Color.green;
+    //    Gizmos.DrawSphere(
+    //        targetPoints[currentTargetIndex].point.position,
+    //        0.3f
+    //    );
+    //}
 }

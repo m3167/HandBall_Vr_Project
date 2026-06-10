@@ -31,7 +31,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 16.104795, y: 1.2617062, z: -15.816035}
-  m_LocalScale: {x: 1, y: 0.83112645, z: 0.8161518}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -108,6 +108,8 @@ MonoBehaviour:
   pool: {fileID: 0}
   isSaved: 0
   launchDelay: 0.5
+  hitForce: 15
+  gravityScale: 0
   spawnClip: {fileID: 8300000, guid: ed1230fb4c5964d4d8efa764d637c3a6, type: 3}
   shootClip: {fileID: 8300000, guid: a5b0551aaeee7d24da9ecbd72fe8de87, type: 3}
 --- !u!54 &3222844748166142336

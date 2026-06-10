@@ -49,7 +49,15 @@ public class LevelManager : MonoBehaviour
     void Awake()
     {
         CreateUI();
+        goalShooter.enabled = false;
+    }
+
+    public void StartGame()
+    {
+        currentLevel = 1;
+        saveCount = 0;
         ApplyLevelSettings();
+        goalShooter.enabled = true;
     }
 
     public void RegisterSave()
@@ -65,7 +73,31 @@ public class LevelManager : MonoBehaviour
             if (currentLevel < maxLevel)
                 StartCoroutine(LevelUpRoutine());
             else
-                Debug.Log("اللاعب خلص كل المراحل!");
+                StartCoroutine(ResetRoutine()); // لما يخلص Level 3 يرجع من الأول
+        }
+    }
+
+    // بيتستدعى من MovingShooter
+    public void ShowRandomMessage()
+    {
+        StartCoroutine(ShowRandomMessageRoutine());
+    }
+
+    IEnumerator ShowRandomMessageRoutine()
+    {
+        if (messages != null && messages.Length > 0)
+        {
+            int index = Random.Range(0, messages.Length);
+            MessageEntry entry = messages[index];
+
+            if (audioSource != null && entry.clip != null)
+                audioSource.PlayOneShot(entry.clip);
+
+            ShowMessage(entry.text);
+
+            yield return new WaitForSeconds(pauseDuration);
+
+            HideMessage();
         }
     }
 
@@ -99,6 +131,38 @@ public class LevelManager : MonoBehaviour
         isTransitioning = false;
     }
 
+    // لما يخلص Level 3 يرجع Level 1 من الأول
+    IEnumerator ResetRoutine()
+    {
+        isTransitioning = true;
+        goalShooter.enabled = false;
+
+        if (audioSource != null && levelUpClip != null)
+            audioSource.PlayOneShot(levelUpClip);
+
+        if (messages != null && messages.Length > 0)
+        {
+            int index = Random.Range(0, messages.Length);
+            MessageEntry entry = messages[index];
+
+            if (audioSource != null && entry.clip != null)
+                audioSource.PlayOneShot(entry.clip);
+
+            ShowMessage(entry.text);
+        }
+
+        yield return new WaitForSeconds(pauseDuration);
+
+        HideMessage();
+
+        // رجع Level 1
+        currentLevel = 1;
+        ApplyLevelSettings();
+
+        goalShooter.enabled = true;
+        isTransitioning = false;
+    }
+
     void ApplyLevelSettings()
     {
         int index = Mathf.Clamp(currentLevel - 1, 0, shootForcePerLevel.Length - 1);
@@ -123,7 +187,6 @@ public class LevelManager : MonoBehaviour
         canvasRect.sizeDelta = new Vector2(uiWidth * 100, uiHeight * 100);
         canvasRect.localScale = Vector3.one * 0.01f;
 
-        // Text مباشرة بدون Panel أو خلفية
         GameObject textGO = new GameObject("MessageText");
         textGO.transform.SetParent(canvasGO.transform, false);
         messageText = textGO.AddComponent<TextMeshProUGUI>();
@@ -172,8 +235,11 @@ public class LevelManager : MonoBehaviour
             messageText.transform.localScale = baseScale * scale;
 
             if (vrCamera != null)
+            {
+                canvasGO.transform.position = vrCamera.position + vrCamera.forward * uiDistance;
                 canvasGO.transform.rotation = Quaternion.LookRotation(
                     canvasGO.transform.position - vrCamera.position);
+            }
 
             yield return null;
         }

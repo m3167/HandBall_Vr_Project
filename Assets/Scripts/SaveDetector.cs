@@ -5,6 +5,7 @@ public class SaveDetector : MonoBehaviour
 {
     [Header("References")]
     public LevelManager levelManager;
+    public MovingShooter movingShooter; // اسحب المدفع المتحرك هنا
 
     [Header("UI")]
     public TextMeshProUGUI saveText;
@@ -13,8 +14,6 @@ public class SaveDetector : MonoBehaviour
     public AudioClip saveClip;
 
     AudioSource audioSource;
-
-   
     static int saves = 0;
 
     void Awake()
@@ -23,7 +22,6 @@ public class SaveDetector : MonoBehaviour
         if (audioSource == null)
             audioSource = gameObject.AddComponent<AudioSource>();
 
-      
         saves = 0;
     }
 
@@ -41,7 +39,12 @@ public class SaveDetector : MonoBehaviour
             if (saveClip != null)
                 audioSource.PlayOneShot(saveClip);
 
-            levelManager.RegisterSave();
+            // لو Moving Mode شغال → ابعت للـ MovingShooter بس
+            if (movingShooter != null && movingShooter.enabled)
+                movingShooter.RegisterSave();
+            // لو Static Mode → ابعت للـ LevelManager بس
+            else if (levelManager != null)
+                levelManager.RegisterSave();
         }
     }
 
